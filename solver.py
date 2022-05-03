@@ -1,3 +1,8 @@
+# Written by Timothy van der Valk and Simon Deuten.
+# 
+# Includes block and PuLP optimized solver algorithms for solving the airplane
+# runway problem.
+
 from data_set import DataSet
 
 class Solution:
@@ -52,7 +57,9 @@ def block_solve(data_set: DataSet) -> Solution:
     max_latest = max(data_set.latest)
     interval = max_latest - min_earliest
     num_blocks = interval // data_set.safety_time
+
     # Equally distribute the remainder of dividing by safety time for more spacing.
+    # This ensures that the entire interval is used to its full potential.
     spacing = data_set.safety_time + 0 * (interval - num_blocks * data_set.safety_time) / num_blocks
     blocks = [-1] * num_blocks
    

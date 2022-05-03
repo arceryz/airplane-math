@@ -1,5 +1,7 @@
-# Airplane data set importer class.
-# Timothy van der Valk.
+# Written by Timothy van der Valk.
+#
+# Airplane data set importer class and input to the solver algorithms.
+# Data can be loaded from Excel-type files for further processing.
 
 import pandas as pd
 
