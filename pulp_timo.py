@@ -5,6 +5,16 @@ from plot import *
 large_data = DataSet("data_large.xlsx")
 small_data = DataSet("data_small.xlsx")
 
+def generate_j(n : int, data_set: DataSet):
+    res = []
+    
+    for i in range(data_set.num_aircraft):
+        if i == n:
+            pass
+        else:
+            res.append(i)
+    
+    return res
 
 #Pulp
 prob : LpProblem = LpProblem('ArrivalTimes', LpMinimize)
@@ -14,12 +24,20 @@ planearrivallist = []
 left_deviations = []
 right_deviations = []
 left_right_bool = []
+collision_bool = []
 
 #Variables and constants for-loop
 for i in range(small_data.num_aircraft):
     left_deviations.append(LpVariable('l'+ str(i), 0, 10000, LpInteger ))
     right_deviations.append(LpVariable('r'+ str(i), 0, 10000, LpInteger ))
     left_right_bool.append(LpVariable('lr' + str(i), 0, 1, LpBinary))
+    collision_bool.append(LpVariable('cb' + str(i), 0, 1, LpBinary))
+    
+#Constraint for safety
+for i in range(small_data.num_aircraft):
+    for j in generate_j(i, small_data):
+        prob.addConstraint(small_data.target[i] - left_deviations[i] + right_deviations[i] <= small_data.target[j] - small_data.safety_time - 10**9 * (1 - collision_bool[i]))
+        prob.addConstraint(small_data.target[i] - left_deviations[i] + right_deviations[i]  >= small_data.target[j] + small_data.safety_time - 10**9 * collision_bool[i])
     
 #Constraints for-loop
 for i in range(small_data.num_aircraft):
@@ -27,6 +45,8 @@ for i in range(small_data.num_aircraft):
     prob.addConstraint(small_data.target[i] - left_deviations[i] >= small_data.earliest[i])
     prob.addConstraint(left_deviations[i] <= 10**9 * left_right_bool[i])
     prob.addConstraint(right_deviations[i] <= 10**9 * (1 - left_right_bool[i]))
+
+
 
 
 
