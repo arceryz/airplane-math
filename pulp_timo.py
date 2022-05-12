@@ -30,14 +30,8 @@ collision_bool = []
 for i in range(small_data.num_aircraft):
     left_deviations.append(LpVariable('l'+ str(i), 0, 10000, LpInteger ))
     right_deviations.append(LpVariable('r'+ str(i), 0, 10000, LpInteger ))
-    left_right_bool.append(LpVariable('lr' + str(i), 0, 1, LpBinary))
-    collision_bool.append(LpVariable('cb' + str(i), 0, 1, LpBinary))
-    
-#Constraint for safety
-for i in range(small_data.num_aircraft):
-    for j in generate_j(i, small_data):
-        prob.addConstraint(small_data.target[i] - left_deviations[i] + right_deviations[i] <= small_data.target[j] - small_data.safety_time - 10**9 * (1 - collision_bool[i]))
-        prob.addConstraint(small_data.target[i] - left_deviations[i] + right_deviations[i]  >= small_data.target[j] + small_data.safety_time - 10**9 * collision_bool[i])
+    left_right_bool.append(LpVariable('lr' + str(i), 0, 1, cat = 'LpBinary'))
+    collision_bool.append(LpVariable('cb' + str(i), 0, 1, cat = 'LpBinary'))
     
 #Constraints for-loop
 for i in range(small_data.num_aircraft):
@@ -46,8 +40,11 @@ for i in range(small_data.num_aircraft):
     prob.addConstraint(left_deviations[i] <= 10**9 * left_right_bool[i])
     prob.addConstraint(right_deviations[i] <= 10**9 * (1 - left_right_bool[i]))
 
-
-
+#Constraint for safety
+for i in range(small_data.num_aircraft):
+    for j in generate_j(i, small_data):
+        prob.addConstraint(small_data.target[i] - left_deviations[i] + right_deviations[i] <= (small_data.target[j] - left_deviations[j] + right_deviations[j] - small_data.safety_time + 10**4 * (1 - collision_bool[i])))
+        prob.addConstraint(small_data.target[i] - left_deviations[i] + right_deviations[i] >= (small_data.target[j] - left_deviations[j] + right_deviations[j] + small_data.safety_time - 10**4 * collision_bool[i]))
 
 
 
