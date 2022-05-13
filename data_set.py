@@ -21,6 +21,15 @@ class DataSet:
             self.load_excel(file)
 
 
+    def __str__(self):
+        # Convert to string using nice tabular representation.
+        out = "Number of aircraft={:d}, Safety time={:d}\n".format(self.num_aircraft, self.safety_time)
+        out += "Earliest, Target, Latest\n"
+        for i in range(self.num_aircraft):
+            out += "{:6d}, {:6d}, {:6d}\n".format(self.earliest[i], self.target[i], self.latest[i])
+        return out
+
+
     def load_excel(self, file: str):
         # Load data set from excel sheet.
         # sheets=None loads all sheets.
@@ -40,10 +49,11 @@ class DataSet:
         self.latest = sheet2.iloc[:, 3].tolist()
 
      
-    def __str__(self):
-        # Convert to string using nice tabular representation.
-        out = "Number of aircraft={:d}, Safety time={:d}\n".format(self.num_aircraft, self.safety_time)
-        out += "Earliest, Target, Latest\n"
+    def get_overlaps(self, plane: int):
+        overlaps = set()
+        e = self.earliest[plane]
+        l = self.latest[plane]
         for i in range(self.num_aircraft):
-            out += "{:6d}, {:6d}, {:6d}\n".format(self.earliest[i], self.target[i], self.latest[i])
-        return out
+            if i != plane and self.latest[i] >= e and self.earliest[i] <= l:
+                overlaps.add(i)
+        return list(overlaps)
