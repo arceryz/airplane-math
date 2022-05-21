@@ -40,7 +40,6 @@ class Solution:
 
     def __str__(self):
         out = ""
-        out += "\n"
         out += "===== SOLUTION REPORT =====\n"
         out += "Technique    = {:s}\n".format(self.technique)
         out += "Backend      = {:s}\n".format("Default" if g_solver == None else "CPLEX")
@@ -202,11 +201,9 @@ def ILP_solve_leftright(data_set: DataSet) -> Solution:
         prob.addConstraint(t + b <= l)
 
         # Choice constraint.
-        # These constraints can be proven to have no influence since any solution
-        # where both a > 0 and b > 0 can be rewritten to a solution with either
-        # a = 0 or b = 0, which is more optimal as |-a + b| <= a + b.
-        # Hence these constraints can be excluded.
-        # However, their presence seems to speed up the CPLEX solver.
+        # Removing these constraints has no influence on the outcome, but they
+        # help nudge the solver in the right direction and thus increase solving
+        # speed. Solutions where a > 0 and b > 0 are no longer considered.
         prob.addConstraint(a <= M * y)
         prob.addConstraint(b <= M * (1 - y))
 
@@ -246,6 +243,7 @@ def ILP_solve_deviation_bound(data_set: DataSet) -> Solution:
     start_time = time.time()
 
     # Solve ILP using the deviation neighborhood technique.
+    # About 3x as slow as our leftright technique.
     prob = pulp.LpProblem("airplane_ilp", pulp.LpMinimize)      
    
     s = data_set.safety_time
