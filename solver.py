@@ -9,15 +9,12 @@
 # preference. This algorithm is fast but suboptimal.
 #
 # 2) ILP_solve_leftright
-# Solve the problem using pulp with left/right deviation technique without a
-# Y decision variable, which is proven to be unnecessary. 
+# Solve the problem using pulp with left/right deviation technique.
+# Seems to be much faster than technique 3.
 #
 # 3) ILP_solve_deviation_bound
 # Solve the problem using pulp with deviation neighborhood technique. The given
 # time is bounded by the deviation which is then minimized.
-#
-# 4) ILP_solve_leftright_y
-# Same as 2) but the unnecessary Y variable is included for completeness.
 
 
 from data_set import *
@@ -47,7 +44,7 @@ class Solution:
         out += "Deviation    = {:d}\n".format(int(self.get_deviation()))
         out += "Objective    = {:d}\n".format(int(self.get_objective()))
         out += "Safety time  = {:d}\n".format(self.data_set.safety_time)
-        out += "Is valid     = {:s}\n".format("Yes" if self.is_valid else "No")
+        out += "Is valid     = {:s}\n".format("Yes" if self.is_valid() else "No")
         out += "ID    early    arrival  latest   target  diff\n"
         for i in range(len(self.arrival_times)):
             diff = self.arrival_times[i] - self.data_set.target[i]
@@ -93,7 +90,8 @@ class Solution:
             # Validate safety constraint.
             for k in range(len(self.arrival_times)):
                 other = self.arrival_times[k]
-                if abs(arrival - other) > self.data_set.safety_time:
+                if abs(arrival - other) < self.data_set.safety_time and k != i:
+                    print("VIOLATION {:d} and {:d}".format(arrival, other))
                     return False
         return True
 
@@ -170,13 +168,15 @@ def ILP_solve_leftright(data_set: DataSet) -> Solution:
     y_vars = []
     k_lists = []
     overlap_lists = []
-    M = 1000000
+
+    # If M is not big, then the solver will give incorrect results!
+    M = 1000000000
 
     # Define all variables
     for i in range(data_set.num_aircraft):
         a_vars.append(pulp.LpVariable("a_"+str(i), 0, M, pulp.LpInteger))
         b_vars.append(pulp.LpVariable("b_"+str(i), 0, M, pulp.LpInteger))
-        y_vars.append(pulp.LpVariable("y_"+str(i), 0, M, pulp.LpInteger))
+        y_vars.append(pulp.LpVariable("y_"+str(i), 0, 1, pulp.LpBinary))
 
         overlap = data_set.get_overlaps(i)
         overlap_lists.append(overlap) 
@@ -234,7 +234,7 @@ def ILP_solve_leftright(data_set: DataSet) -> Solution:
         t = data_set.target[i]
         arr = t - a + b
         sol.arrival_times[i] = arr
-        print("plane {:d}: a={:d} b={:d}, dev={:d}, overlaps={:d}".format(i, a, b, abs(t - arr), len(overlap_lists[i])))
+        print("plane {:d}: a={:d} b={:d}, y={:d}, dev={:d}, overlaps={:d}".format(i, a, b, y, abs(t - arr), len(overlap_lists[i])))
         
     return sol
 
@@ -251,7 +251,9 @@ def ILP_solve_deviation_bound(data_set: DataSet) -> Solution:
     d_vars = []
     k_lists = []
     overlap_lists = []
-    M = 1000000
+
+    # If M is not big, then the solver will give incorrect results!
+    M = 1000000000
 
     # Define all variables
     for i in range(data_set.num_aircraft):
