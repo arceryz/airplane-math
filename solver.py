@@ -29,8 +29,6 @@ class Solution:
     # Class representing a solution to the airplanes problem.
     
     def __init__(self, data_set: DataSet):
-        self.technique = "Unknown technique"
-        self.solving_time = 0.0
         self.data_set = data_set
         self.arrival_times = [-1] * data_set.num_aircraft
         
@@ -38,9 +36,7 @@ class Solution:
     def __str__(self):
         out = ""
         out += "===== SOLUTION REPORT =====\n"
-        out += "Technique    = {:s}\n".format(self.technique)
         out += "Backend      = {:s}\n".format("Default" if g_solver == None else "CPLEX")
-        out += "Solving time = {:.2f}s\n".format(self.solving_time)
         out += "Deviation    = {:d}\n".format(int(self.get_deviation()))
         out += "Objective    = {:d}\n".format(int(self.get_objective()))
         out += "Safety time  = {:d}\n".format(self.data_set.safety_time)
@@ -103,8 +99,6 @@ def load_cplex():
 
 
 def block_solve(data_set: DataSet) -> Solution:
-    start_time = time.time()
-
     # Block solve algorithm distributes the entire time interval in blocks 
     # based on safety time. Planes are then assigned the closest empty block based
     # on their target time.
@@ -148,166 +142,54 @@ def block_solve(data_set: DataSet) -> Solution:
     
     # Assign all nonempty blocks to the solution.
     sol = Solution(data_set)
-    sol.technique = "Block Assign"
-    sol.solving_time = time.time() - start_time
     for i in range(num_blocks):
         if blocks[i] != -1:
             sol.arrival_times[blocks[i]] = int(round(min_earliest + i * spacing))
     return sol
 
 
-def ILP_solve_leftright(data_set: DataSet) -> Solution:
-    start_time = time.time()
+def ILP_solve_leftright(data: DataSet) -> Solution:
 
     # Solve ILP using the left/right deviations technique without removal of
     # y decision constraint.
     prob = pulp.LpProblem("airplane_ilp", pulp.LpMinimize)      
-   
     a_vars = []
     b_vars = []
     y_vars = []
-    k_lists = []
-    overlap_lists = []
+    k_matrix = []
+    M = 1000000
 
-    # If M is not big, then the solver will give incorrect results!
-    M = 1000000000
-
-    # Define all variables
-    for i in range(data_set.num_aircraft):
+    for i in range(data.num_aircraft):
         a_vars.append(pulp.LpVariable("a_"+str(i), 0, M, pulp.LpInteger))
         b_vars.append(pulp.LpVariable("b_"+str(i), 0, M, pulp.LpInteger))
-        y_vars.append(pulp.LpVariable("y_"+str(i), 0, 1, pulp.LpBinary))
+        y_vars.append(pulp.LpVariable("y_"+str(i), 0, 1, pulp.LpInteger))
 
-        overlap = data_set.get_overlaps(i)
-        overlap_lists.append(overlap) 
-        k_vars = []
-        for j in range(len(overlap)):
-            k_vars.append(pulp.LpVariable("k_"+str(i)+"_"+str(j), 0, 1, pulp.LpBinary)) 
-        k_lists.append(k_vars)
+        row = []
+        for j in range(data.num_aircraft):
+            row.append(pulp.LpVariable("k_"+str(i)+"_"+str(j), 0, 1, pulp.LpInteger))
+        k_matrix.append(row)
+     
+    for i in range(data.num_aircraft):
+        g = data.target[i] - a_vars[i] + b_vars[i]
+        prob.addConstraint(g >= data.earliest[i])
+        prob.addConstraint(g <= data.latest[i])
+        prob.addConstraint(a_vars[i] <= M * y_vars[i])
+        prob.addConstraint(b_vars[i] <= M * (1 - y_vars[i]))
 
-    # Define all constraints.
-    for i in range(data_set.num_aircraft):
-        a = a_vars[i]
-        b = b_vars[i]
-        y = y_vars[i]
-        e = data_set.earliest[i]
-        l = data_set.latest[i]
-        t = data_set.target[i]
-        s = data_set.safety_time
-        overlap = overlap_lists[i]
-
-        # Boundary constraint.
-        prob.addConstraint(t - a >= e)
-        prob.addConstraint(t + b <= l)
-
-        # Choice constraint.
-        # Removing these constraints has no influence on the outcome, but they
-        # help nudge the solver in the right direction and thus increase solving
-        # speed. Solutions where a > 0 and b > 0 are no longer considered.
-        prob.addConstraint(a <= M * y)
-        prob.addConstraint(b <= M * (1 - y))
-
-        # Plane-relative constraints. Based on the decision for kj, disable one
-        # constraint by making it trivial. The decision kj determines whether
-        # we should align left or right of plane j.
-        for ii in range(len(overlap)):
-            j = overlap[ii]
-            aj = a_vars[j]
-            bj = b_vars[j]
-            tj = data_set.target[j]
-            kj = k_lists[i][ii]
-            prob.addConstraint(t - a + b <= tj - aj + bj - s + M * kj)
-            prob.addConstraint(t - a + b >= tj - aj + bj + s - M * (1 - kj))
+        for j in range(data.num_aircraft):
+            if i == j:
+                continue
+            gj = data.target[j] - a_vars[j] + b_vars[j]
+            prob.addConstraint(g <= gj - data.safety_time + M * k_matrix[i][j])
+            prob.addConstraint(g >= gj + data.safety_time - M * (1 - k_matrix[i][j]))
+            prob.addConstraint(k_matrix[i][j] + k_matrix[j][i] == 1)
         pass
 
     prob.setObjective(sum(a_vars) + sum(b_vars))
     prob.solve(g_solver)
 
-    sol = Solution(data_set)
-    sol.solving_time = time.time() - start_time
-    sol.technique = "ILP LeftRight"
-
-    for i in range(data_set.num_aircraft):
-        a = int(pulp.value(a_vars[i]))
-        b = int(pulp.value(b_vars[i]))
-        y = int(pulp.value(y_vars[i]))
-        t = data_set.target[i]
-        arr = t - a + b
-        sol.arrival_times[i] = arr
-        print("plane {:d}: a={:d} b={:d}, y={:d}, dev={:d}, overlaps={:d}".format(i, a, b, y, abs(t - arr), len(overlap_lists[i])))
-        
-    return sol
-
-
-def ILP_solve_deviation_bound(data_set: DataSet) -> Solution:
-    start_time = time.time()
-
-    # Solve ILP using the deviation neighborhood technique.
-    # About 3x as slow as our leftright technique.
-    prob = pulp.LpProblem("airplane_ilp", pulp.LpMinimize)      
-   
-    s = data_set.safety_time
-    g_vars = []
-    d_vars = []
-    k_lists = []
-    overlap_lists = []
-
-    # If M is not big, then the solver will give incorrect results!
-    M = 1000000000
-
-    # Define all variables
-    for i in range(data_set.num_aircraft):
-        g_vars.append(pulp.LpVariable("g_"+str(i), 0, M, pulp.LpInteger))
-        d_vars.append(pulp.LpVariable("d_"+str(i), 0, M, pulp.LpInteger))
-
-        overlap = data_set.get_overlaps(i)
-        overlap_lists.append(overlap) 
-        k_vars = []
-        for j in range(len(overlap)):
-            k_vars.append(pulp.LpVariable("k_"+str(i)+"_"+str(j), 0, 1, pulp.LpBinary)) 
-        k_lists.append(k_vars)
-
-    # Define all constraints.
-    for i in range(data_set.num_aircraft):
-        g = g_vars[i]
-        d = d_vars[i]
-        e = data_set.earliest[i]
-        l = data_set.latest[i]
-        t = data_set.target[i]
-        overlap = overlap_lists[i]
-
-        # Boundary constraint.
-        prob.addConstraint(g >= e)
-        prob.addConstraint(g <= l)
-
-        # Deviation constraint. From this constraint we have an upper bound
-        # for the deviation around target given by d, which we can then minimize.
-        prob.addConstraint(g >= t - d)
-        prob.addConstraint(g <= t + d)
-
-        # Plane safety constraints.
-        k_vars = k_lists[i]
-        for ii in range(len(overlap)):
-            j = overlap[ii]
-            gj = g_vars[j]
-            kj = k_vars[ii]
-
-            prob.addConstraint(g <= gj - s + M * kj)
-            prob.addConstraint(g >= gj + s - M * (1 - kj))
-        pass
-
-    prob.setObjective(sum(d_vars))
-    prob.solve(g_solver)
-
-    sol = Solution(data_set)
-    sol.solving_time = time.time() - start_time
-    sol.technique = "ILP Deviation neighborhood"
-
-    for i in range(data_set.num_aircraft):
-        g = int(pulp.value(g_vars[i]))
-        d = int(pulp.value(d_vars[i]))
-        t = data_set.target[i]
+    sol = Solution(data) 
+    for i in range(data.num_aircraft):
+        g = int(data.target[i] - pulp.value(a_vars[i]) + pulp.value(b_vars[i]))
         sol.arrival_times[i] = g
-        print("plane {:d}: g={:d} d={:d}, dev={:d}, overlaps={:d}".format(i, g, d, abs(t - g), len(overlap_lists[i])))
-       
     return sol
