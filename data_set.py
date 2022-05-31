@@ -1,4 +1,4 @@
-# Written by Timothy van der Valk.
+# Written by Timothy van der Valk, Frank van der Top, Shae Williams.
 #
 # Airplane data set importer class and input to the solver algorithms.
 # Data can be loaded from Excel-type files for further processing.
@@ -15,6 +15,7 @@ class DataSet:
         self.earliest = []
         self.target = []
         self.latest = []
+        self.safety_times = []
 
         # Load file if argument given.
         if file != "":
@@ -46,8 +47,12 @@ class DataSet:
         sheet2 = excel["Times per aircraft"]
         self.earliest = sheet2.iloc[:, 1].tolist()
         self.target = sheet2.iloc[:, 2].tolist()
-        self.latest = sheet2.iloc[:, 3].tolist()
-
+        self.latest = sheet2.iloc[:, 3].tolist() 
+        if file == "data_large_extended.xlsx" or file == "data_small_extended.xlsx":
+            self.safety_times = sheet2.iloc[:, 6].tolist()
+        else:
+            self.safety_times = self.num_aircraft * [self.safety_time]
+            
      
     def get_overlaps(self, plane: int):
         overlaps = set()

@@ -1,4 +1,4 @@
-# Written by Timothy van der Valk and Simon Deuten.
+# Written by Timothy van der Valk, Simon Deuten, Frank van der Top, Shae Williams.
 # 
 # Includes block and PuLP optimized solver algorithms for solving the airplane
 # runway problem.
@@ -39,14 +39,14 @@ class Solution:
         out += "Backend      = {:s}\n".format("Default" if g_solver == None else "CPLEX")
         out += "Deviation    = {:d}\n".format(int(self.get_deviation()))
         out += "Objective    = {:d}\n".format(int(self.get_objective()))
-        out += "Safety time  = {:d}\n".format(self.data_set.safety_time)
+        out += "Base safety time  = {:d}\n".format(self.data_set.safety_time)
         out += "Is valid     = {:s}\n".format("Yes" if self.is_valid() else "No")
-        out += "ID    early    arrival  latest   target  diff\n"
+        out += "ID    early    arrival  latest   target  diff  safety time\n"
         for i in range(len(self.arrival_times)):
             diff = self.arrival_times[i] - self.data_set.target[i]
-            out += "{:<3d} : {:<6d} < {:<6d} < {:<6d} : {:<6d}  {:<3d}\n".format(i, \
+            out += "{:<3d} : {:<6d} < {:<6d} < {:<6d} : {:<6d}  {:<3d}  {:<6d}\n".format(i, \
                     self.data_set.earliest[i], self.arrival_times[i], \
-                    self.data_set.latest[i], self.data_set.target[i], diff)
+                    self.data_set.latest[i], self.data_set.target[i], diff, self.data_set.safety_times[i])
         return out
 
 
@@ -86,7 +86,7 @@ class Solution:
             # Validate safety constraint.
             for k in range(len(self.arrival_times)):
                 other = self.arrival_times[k]
-                if abs(arrival - other) < self.data_set.safety_time and k != i:
+                if abs(arrival - other) < self.data_set.safety_times[k] and k != i:
                     print("VIOLATION {:d} and {:d}".format(arrival, other))
                     return False
         return True
@@ -147,8 +147,7 @@ def block_solve(data_set: DataSet) -> Solution:
             sol.arrival_times[blocks[i]] = int(round(min_earliest + i * spacing))
     return sol
 
-
-def ILP_solve_leftright(data: DataSet) -> Solution:
+def ILP_solve_leftright_extended(data: DataSet) -> Solution:
 
     # Solve ILP using the left/right deviations technique without removal of
     # y decision constraint.
@@ -180,8 +179,8 @@ def ILP_solve_leftright(data: DataSet) -> Solution:
             if i == j:
                 continue
             gj = data.target[j] - a_vars[j] + b_vars[j]
-            prob.addConstraint(g <= gj - data.safety_time + M * k_matrix[i][j])
-            prob.addConstraint(g >= gj + data.safety_time - M * (1 - k_matrix[i][j]))
+            prob.addConstraint(g <= gj - data.safety_times[i] + M * k_matrix[i][j])
+            prob.addConstraint(g >= gj + data.safety_times[i] - M * (1 - k_matrix[i][j]))
             prob.addConstraint(k_matrix[i][j] + k_matrix[j][i] == 1)
         pass
 
@@ -192,4 +191,5 @@ def ILP_solve_leftright(data: DataSet) -> Solution:
     for i in range(data.num_aircraft):
         g = int(data.target[i] - pulp.value(a_vars[i]) + pulp.value(b_vars[i]))
         sol.arrival_times[i] = g
+    
     return sol
