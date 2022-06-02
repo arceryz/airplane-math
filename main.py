@@ -3,7 +3,7 @@
 from solver import * 
 from plot import *
 
-data_set = DataSet("data_small.xlsx")
+data_set = DataSet("data_large_extended.xlsx")
 load_cplex()
 sol = ILP_solve_leftright_extended(data_set)
 sol.write_report("report.txt")

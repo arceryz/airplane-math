@@ -40,6 +40,7 @@ class Solution:
         out += "Deviation    = {:d}\n".format(int(self.get_deviation()))
         out += "Objective    = {:d}\n".format(int(self.get_objective()))
         out += "Base safety time  = {:d}\n".format(self.data_set.safety_time)
+        out += "Perfect arrival count = {:d}\n".format(int(self.count_0_deviations()))
         out += "Is valid     = {:s}\n".format("Yes" if self.is_valid() else "No")
         out += "ID    early    arrival  latest   target  diff  safety time\n"
         for i in range(len(self.arrival_times)):
@@ -48,7 +49,13 @@ class Solution:
                     self.data_set.earliest[i], self.arrival_times[i], \
                     self.data_set.latest[i], self.data_set.target[i], diff, self.data_set.safety_times[i])
         return out
-
+    
+    def count_0_deviations(self):
+        count = 0
+        for i in range(len(self.arrival_times)):
+            if self.arrival_times[i] - self.data_set.target[i] == 0:
+                count += 1
+        return count
 
     def write_report(self, file: str):
         # Write report to given file.
