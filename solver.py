@@ -155,7 +155,7 @@ def block_solve(data_set: DataSet) -> Solution:
     return sol
 
 def ILP_solve_leftright_extended(data: DataSet) -> Solution:
-
+    
     # Solve ILP using the left/right deviations technique without removal of
     # y decision constraint.
     prob = pulp.LpProblem("airplane_ilp", pulp.LpMinimize)      
